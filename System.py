@@ -56,7 +56,7 @@ def menu():
 
 while True:
     menu()
-    choice = input(\n Enter Choice).strip()
+    choice = input('\n Enter Choice:').strip()
 
     if choice == '1':
         f = input("Flower_Name:")
@@ -67,4 +67,21 @@ while True:
     elif choice == '3':
         kw = input("Enter keyword :")
         search_flower(kw)
-    e
+    elif choice == '4':
+        bid = int(input("Flower ID:"))
+        member = input("Buyer Name:")
+        sell_flower(bid, member)
+
+    elif choice == '5':
+        bid = int(input("Flower ID:"))
+        delete_flower(bid)
+    
+    elif choice == '5':
+        bid = int(input("Flower ID:"))
+        return_flower(bid)
+
+    elif choice == '6':
+        print("Goodbye")
+        break
+    else:
+        print("Invalid Choice")

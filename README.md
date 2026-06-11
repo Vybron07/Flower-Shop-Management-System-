@@ -10,5 +10,6 @@ It is a very raw version in which it is just menu basd program in the terminal a
 Version 1.0.0
 
 Started working on the higer end version which will contain all the major features and will add the deails of all features tomorrow.
+Just added all features will add new features and tool by tomorrow and photos of image too. With working screen =schot of everything .
 
 

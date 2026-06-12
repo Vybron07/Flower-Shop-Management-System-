@@ -13,3 +13,8 @@ Started working on the higer end version which will contain all the major featur
 Just added all features will add new features and tool by tomorrow and photos of image too. With working screen =schot of everything .
 
 
+Version 1.1.0
+Added some new features in the system. The features inctuded are:-
+1.
+
+

@@ -1,55 +1,85 @@
 import sqlite3
-import os 
 
-DB_NAME = 'shop.db'
+DB_NAME = "shop.db"
 
 def connect():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
 
-def init_db():
+def initialize_db():
     conn = connect()
     cur = conn.cursor()
 
-    #Flower Table
+    # Flowers/inventory table
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS shop(
+        CREATE TABLE IF NOT EXISTS shop (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Flower_Name TEXT NOT NULL,
-            Customer TEXT NOT NULL,
-            Price REAL NOT NULL,
-            isbn TEXT UNIQUE,
-            total_Stock INTEGER DEFAULT 1,
-            Available_Stock INTEGER DEFAULT 1,
-            Condition TEXT DEFAULT 'Fresh',
+            name TEXT NOT NULL,
+            price REAL NOT NULL,
+            flower_type TEXT DEFAULT '',
+            total_stock INTEGER DEFAULT 1,
+            available_stock INTEGER DEFAULT 1,
+            condition TEXT DEFAULT 'Fresh',
             cover_image BLOB,
             added_date TEXT DEFAULT (DATE('now'))
         )
     """)
 
-     # Customers table
+    # Customers table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS customers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Name TEXT NOT NULL,
-            email TEXT UNIQUE,
-            phone TEXT,
-            Bought_date TEXT DEFAULT (DATE('now')),
+            name TEXT NOT NULL,
+            email TEXT DEFAULT '',
+            phone TEXT DEFAULT '',
+            joined_date TEXT DEFAULT (DATE('now')),
+            active INTEGER DEFAULT 1
         )
     """)
+
     # Staff table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS staff (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            Name TEXT NOT NULL,
+            name TEXT NOT NULL,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
-            Role TEXT DEFAULT 'Librarian',
-            email TEXT,
-            Phone TEXT,
-            Joined_date TEXT DEFAULT (DATE('now')),
+            role TEXT DEFAULT 'Manager',
+            email TEXT DEFAULT '',
+            phone TEXT DEFAULT '',
+            joined_date TEXT DEFAULT (DATE('now')),
             active INTEGER DEFAULT 1
+        )
+    """)
+
+    # Orders table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER NOT NULL,
+            staff_id INTEGER NOT NULL,
+            order_date TEXT DEFAULT (DATETIME('now')),
+            total_amount REAL DEFAULT 0.0,
+            discount REAL DEFAULT 0.0,
+            final_amount REAL DEFAULT 0.0,
+            status TEXT DEFAULT 'Pending',
+            FOREIGN KEY (customer_id) REFERENCES customers(id),
+            FOREIGN KEY (staff_id) REFERENCES staff(id)
+        )
+    """)
+
+    # Order items table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS order_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            flower_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL,
+            unit_price REAL NOT NULL,
+            subtotal REAL NOT NULL,
+            FOREIGN KEY (order_id) REFERENCES orders(id),
+            FOREIGN KEY (flower_id) REFERENCES shop(id)
         )
     """)
 
@@ -64,15 +94,15 @@ def init_db():
     print("Database initialized successfully!")
 
 
-# System Functions
+# ── Flower functions ────────────────────────────────────────
 
-def add_flower(Flower_Name, Customer, Price, isbn="", total_Stock=1, Available_Stock=1, Condition="Fresh", cover_image=None):
+def add_flower(name, price, flower_type="", condition="Fresh", stock=1, cover=None):
     conn = connect()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO shop (Flower_Name, Customer, Price, isbn, total_Stock, Available_Stock, Condition, cover_image)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (Flower_Name, Customer, Price, isbn, total_Stock, Available_Stock, Condition, cover_image))
+        INSERT INTO shop (name, price, flower_type, total_stock, available_stock, condition, cover_image)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (name, price, flower_type, stock, stock, condition, cover))
     conn.commit()
     conn.close()
 
@@ -89,8 +119,8 @@ def search_flowers(keyword):
     cur = conn.cursor()
     cur.execute("""
         SELECT * FROM shop
-        WHERE Flower_Name LIKE ? OR Customer LIKE ? OR Condition LIKE ? OR isbn LIKE ?
-    """, (f"%{keyword}%",) * 4)
+        WHERE name LIKE ? OR flower_type LIKE ? OR condition LIKE ?
+    """, (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"))
     flowers = cur.fetchall()
     conn.close()
     return flowers
@@ -101,10 +131,10 @@ def filter_flowers(condition=None, available_only=False):
     query = "SELECT * FROM shop WHERE 1=1"
     params = []
     if condition:
-        query += " AND Condition = ?"
+        query += " AND condition = ?"
         params.append(condition)
     if available_only:
-        query += " AND Available_Stock > 0"
+        query += " AND available_stock > 0"
     cur.execute(query, params)
     flowers = cur.fetchall()
     conn.close()
@@ -113,7 +143,7 @@ def filter_flowers(condition=None, available_only=False):
 def update_flower_condition(flower_id, condition):
     conn = connect()
     cur = conn.cursor()
-    cur.execute("UPDATE shop SET Condition = ? WHERE id = ?", (condition, flower_id))
+    cur.execute("UPDATE shop SET condition = ? WHERE id = ?", (condition, flower_id))
     conn.commit()
     conn.close()
 
@@ -124,7 +154,16 @@ def delete_flower(flower_id):
     conn.commit()
     conn.close()
 
-#Customer_Functions
+def get_low_stock_flowers(threshold=5):
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM shop WHERE available_stock <= ?", (threshold,))
+    flowers = cur.fetchall()
+    conn.close()
+    return flowers
+
+
+# ── Customer functions ──────────────────────────────────────
 
 def add_customer(name, email="", phone=""):
     conn = connect()
@@ -139,7 +178,7 @@ def add_customer(name, email="", phone=""):
 def get_all_customers():
     conn = connect()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM customers")
+    cur.execute("SELECT * FROM customers WHERE active = 1")
     customers = cur.fetchall()
     conn.close()
     return customers
@@ -147,11 +186,12 @@ def get_all_customers():
 def delete_customer(customer_id):
     conn = connect()
     cur = conn.cursor()
-    cur.execute("DELETE FROM customers WHERE id = ?", (customer_id,))
+    cur.execute("UPDATE customers SET active = 0 WHERE id = ?", (customer_id,))
     conn.commit()
     conn.close()
 
-#Staff_Functions
+
+# ── Staff functions ─────────────────────────────────────────
 
 def verify_login(username, password):
     conn = connect()
@@ -181,52 +221,99 @@ def get_all_staff():
     conn.close()
     return staff
 
-# Issue
 
-def sold_flower(flower_id, customer_id, bought_by, returned_date):
+# ── Order functions ─────────────────────────────────────────
+
+def create_order(customer_id, staff_id, items, discount=0.0):
     conn = connect()
     cur = conn.cursor()
+    total = sum(i["quantity"] * i["unit_price"] for i in items)
+    final = total - (total * discount / 100)
     cur.execute("""
-        INSERT INTO issued_flowers (flower_id, customer_id, issued_by, due_date)
-        VALUES (?, ?, ?, ?)
-    """, (flower_id, customer_id, issued_by, due_date))
-    cur.execute("""
-        UPDATE shop SET Available_Stock = Available_Stock - 1 WHERE id = ?
-    """, (flower_id,))
+        INSERT INTO orders (customer_id, staff_id, total_amount, discount, final_amount)
+        VALUES (?, ?, ?, ?, ?)
+    """, (customer_id, staff_id, total, discount, final))
+    order_id = cur.lastrowid
+    for item in items:
+        subtotal = item["quantity"] * item["unit_price"]
+        cur.execute("""
+            INSERT INTO order_items (order_id, flower_id, quantity, unit_price, subtotal)
+            VALUES (?, ?, ?, ?, ?)
+        """, (order_id, item["flower_id"], item["quantity"], item["unit_price"], subtotal))
+        cur.execute("""
+            UPDATE shop SET available_stock = available_stock - ? WHERE id = ?
+        """, (item["quantity"], item["flower_id"]))
     conn.commit()
     conn.close()
+    return order_id
 
-
-def return_flower(issue_id, fine=0.0):
+def get_all_orders():
     conn = connect()
     cur = conn.cursor()
     cur.execute("""
-        UPDATE sold_flowers
-        SET return_date = DATE('now'), fine = ?, status = 'Returned'
-        WHERE id = ?
-    """, (fine, issue_id))
-    cur.execute("""
-        UPDATE shop SET Available_Stock = Available_Stock + 1
-        WHERE id = (SELECT flower_id FROM sold_flowers WHERE id = ?)
-    """, (issue_id,))
-    conn.commit()
-    conn.close()
-
-def get_sold_flowers():
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT sf.id, f.Flower_Name, c.name as customer, sf.issued_date, sf.due_date, sf.status
-        FROM sold_flowers sf
-        JOIN shop f ON sf.flower_id = f.id
-        JOIN customers c ON sf.customer_id = c.id
-        WHERE sf.status = 'Sold'
+        SELECT o.id, c.name as customer, s.name as staff,
+               o.order_date, o.total_amount, o.discount,
+               o.final_amount, o.status
+        FROM orders o
+        JOIN customers c ON o.customer_id = c.id
+        JOIN staff s ON o.staff_id = s.id
+        ORDER BY o.order_date DESC
     """)
-    records = cur.fetchall()
+    orders = cur.fetchall()
     conn.close()
-    return records
+    return orders
 
-#Dashboard Stats
+def get_order_details(order_id):
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT o.id, c.name as customer, c.phone as customer_phone,
+               s.name as staff, o.order_date,
+               o.total_amount, o.discount, o.final_amount, o.status
+        FROM orders o
+        JOIN customers c ON o.customer_id = c.id
+        JOIN staff s ON o.staff_id = s.id
+        WHERE o.id = ?
+    """, (order_id,))
+    order = cur.fetchone()
+    cur.execute("""
+        SELECT f.name as flower, oi.quantity, oi.unit_price, oi.subtotal
+        FROM order_items oi
+        JOIN shop f ON oi.flower_id = f.id
+        WHERE oi.order_id = ?
+    """, (order_id,))
+    items = cur.fetchall()
+    conn.close()
+    return order, items
+
+def update_order_status(order_id, status):
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("UPDATE orders SET status = ? WHERE id = ?", (status, order_id))
+    conn.commit()
+    conn.close()
+
+def get_order_stats():
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM orders")
+    total_orders = cur.fetchone()[0]
+    cur.execute("SELECT SUM(final_amount) FROM orders")
+    total_revenue = cur.fetchone()[0] or 0.0
+    cur.execute("SELECT COUNT(*) FROM orders WHERE status = 'Pending'")
+    pending = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM orders WHERE DATE(order_date) = DATE('now')")
+    today_orders = cur.fetchone()[0]
+    conn.close()
+    return {
+        "total_orders": total_orders,
+        "total_revenue": total_revenue,
+        "pending": pending,
+        "today_orders": today_orders
+    }
+
+
+# ── Dashboard stats ─────────────────────────────────────────
 
 def get_stats():
     conn = connect()
@@ -235,19 +322,18 @@ def get_stats():
     total_flowers = cur.fetchone()[0]
     cur.execute("SELECT COUNT(*) FROM customers WHERE active = 1")
     total_customers = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM sold_flowers WHERE status = 'Sold'")
+    cur.execute("SELECT COUNT(*) FROM orders WHERE status = 'Completed'")
     total_sold = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM issued_flowers WHERE due_date < DATE('now') AND status = 'Issued'")
-    overdue = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM orders WHERE status = 'Pending'")
+    pending = cur.fetchone()[0]
     conn.close()
     return {
         "total_flowers": total_flowers,
         "total_customers": total_customers,
         "total_sold": total_sold,
-        "overdue": overdue
+        "pending": pending
     }
+
 
 if __name__ == "__main__":
     initialize_db()
-
-

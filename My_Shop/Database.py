@@ -337,3 +337,65 @@ def get_stats():
 
 if __name__ == "__main__":
     initialize_db()
+
+# ── Occasion functions ──────────────────────────────────────
+
+def initialize_occasions():
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS occasions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            sub_type TEXT DEFAULT '',
+            description TEXT DEFAULT '',
+            flowers TEXT DEFAULT '',
+            created_date TEXT DEFAULT (DATE('now'))
+        )
+    """)
+    # Seed default occasions
+    defaults = [
+        ("Royal Wedding",      "Marriage", "",        "Elegant red & gold wedding decor", "Red Rose, Marigold, Jasmine"),
+        ("Wedding Reception",  "Marriage", "",        "Grand floral arrangements",         "White Lily, Red Rose, Orchid"),
+        ("Kids Birthday",      "Birthday", "Children","Fun and colorful for little ones",  "Sunflower, Daisy, Tulip"),
+        ("Teen Birthday",      "Birthday", "Teen",    "Vibrant yellow energy for teens",   "Sunflower, Yellow Rose, Gerbera"),
+        ("Adult Birthday",     "Birthday", "Adult",   "Elegant pink & white arrangement",  "Pink Rose, White Lily, Orchid"),
+        ("Senior Birthday",    "Birthday", "Elderly", "Graceful purple arrangement",       "Lavender, Purple Orchid, Iris"),
+        ("Ganesh Puja",        "Puja",     "",        "Traditional marigold & lotus",      "Marigold, Lotus, Jasmine"),
+        ("Durga Puja",         "Puja",     "",        "Sacred flowers for the goddess",    "Marigold, Hibiscus, Bel Patra"),
+        ("Lakshmi Puja",       "Puja",     "",        "Auspicious lotus & marigold",       "Lotus, Marigold, Rose"),
+        ("Saraswati Puja",     "Puja",     "",        "White & yellow for the goddess",    "White Rose, Marigold, Jasmine"),
+    ]
+    for name, typ, sub, desc, flowers in defaults:
+        cur.execute("""
+            INSERT OR IGNORE INTO occasions (name, type, sub_type, description, flowers)
+            VALUES (?, ?, ?, ?, ?)
+        """, (name, typ, sub, desc, flowers))
+    conn.commit()
+    conn.close()
+
+def get_all_occasions():
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM occasions ORDER BY type, sub_type")
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+def add_occasion(name, typ, sub_type, description, flowers):
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO occasions (name, type, sub_type, description, flowers)
+        VALUES (?, ?, ?, ?, ?)
+    """, (name, typ, sub_type, description, flowers))
+    conn.commit()
+    conn.close()
+
+def delete_occasion(occasion_id):
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM occasions WHERE id = ?", (occasion_id,))
+    conn.commit()
+    conn.close()

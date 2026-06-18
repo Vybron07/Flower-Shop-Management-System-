@@ -1,0 +1,73 @@
+import threading
+
+_pygame_available = False
+try:
+    import pygame
+    pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+    _pygame_available = True
+except Exception:
+    pass
+
+
+def _generate_beep(frequency=440, duration=0.08, volume=0.4):
+    """Generate a beep sound using pygame's sndarray if available."""
+    if not _pygame_available:
+        return None
+    try:
+        import numpy as np
+        sample_rate = 44100
+        samples = int(sample_rate * duration)
+        t = [i / sample_rate for i in range(samples)]
+        wave = [int(volume * 32767 * __import__('math').sin(2 * __import__('math').pi * frequency * s)) for s in t]
+        # Stereo
+        stereo = []
+        for s in wave:
+            stereo.extend([s, s])
+        buf = __import__('array').array('h', stereo)
+        sound = pygame.sndarray.make_sound(__import__('numpy').array([[s, s] for s in wave], dtype='int16'))
+        return sound
+    except Exception:
+        return None
+
+
+# Pre-build sounds lazily
+_sounds = {}
+
+
+def _get_sound(name):
+    if not _pygame_available:
+        return None
+    if name not in _sounds:
+        freq_map = {
+            "click":   (600,  0.06, 0.3),
+            "success": (880,  0.12, 0.35),
+            "error":   (220,  0.15, 0.4),
+            "hover":   (750,  0.04, 0.15),
+            "delete":  (180,  0.10, 0.35),
+            "open":    (520,  0.08, 0.25),
+            "save":    (660,  0.10, 0.3),
+        }
+        params = freq_map.get(name, (440, 0.08, 0.3))
+        _sounds[name] = _generate_beep(*params)
+    return _sounds[name]
+
+
+def play(sound_name: str):
+    """Play a named sound in a background thread (non-blocking)."""
+    def _play():
+        try:
+            s = _get_sound(sound_name)
+            if s:
+                s.play()
+        except Exception:
+            pass
+    threading.Thread(target=_play, daemon=True).start()
+
+
+def click():    play("click")
+def success():  play("success")
+def error():    play("error")
+def hover():    play("hover")
+def delete():   play("delete")
+def open_sfx(): play("open")
+def save():     play("save")
